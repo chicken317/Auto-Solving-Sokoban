@@ -5,6 +5,8 @@ import heapq
 
 from sokoban import sokoban_goal_state
 
+UNREACHABLE = 999999999 
+
 def reverse_bfs(goal, free_cells):                   # hàm BFS ngược: tính số lần đẩy thùng tối thiểu từ các ô có đường đi về đích
 
     DIRECTIONS = [(0,1), (0,-1), (-1,0), (1,0)]      # lên, xuống, trái, phải
@@ -39,7 +41,7 @@ def heuristic(state):
         bx = box[0]
         by = box[1]
 
-        min_dist = 999999
+        min_dist = UNREACHABLE
 
         for storage in state.storage:
             sx = storage[0]
