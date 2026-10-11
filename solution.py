@@ -5,6 +5,31 @@ import heapq
 
 from sokoban import sokoban_goal_state
 
+def reverse_bfs(goal, free_cells):                   # hàm BFS ngược: tính số lần đẩy thùng tối thiểu từ các ô có đường đi về đích
+
+    DIRECTIONS = [(0,1), (0,-1), (-1,0), (1,0)]      # lên, xuống, trái, phải
+    distance = {}
+    distance[goal] = 0
+    queue = [goal]
+
+    while len(queue) > 0:
+        current = current.pop(0)
+        x = current[0]
+        y = current[0]
+
+        for direction in DIRECTIONS:
+            dx = direction[0]
+            dy = direction[1]
+            box_cell = (x - dx, y - dy)             # box tại vị trí trước khi đến đích
+            robot_cell = (x - 2*dx, y - 2*dy)       # robot ở vị trí để đẩy thùng vào đích
+            
+            if box_cell in free_cells and robot_cell in free_cells:
+                if box_cell not in distance:
+                    distance[box_cell] = distance[current] + 1
+                    queue.append[box_cell]
+
+    return distance
+
 def heuristic(state):
 
     total = 0 
