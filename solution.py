@@ -32,6 +32,25 @@ def reverse_bfs(goal, free_cells):                   # hàm BFS ngược: tính 
 
     return distance
 
+def best_matching(cost_matrix, box_index, used_goals):
+
+    if box_index >= len(cost_matrix):
+        return 0
+    
+    min_cost = UNREACHABLE
+
+    for goal_index in range(len(cost_matrix[box_index])):
+
+        if (not used_goals(goal_index)) and cost_matrix[box_index][goal_index] < UNREACHABLE:
+            used_goals[goal_index] = True
+            total_cost = cost_matrix[box_index][goal_index] + best_matching(cost_matrix, box_index + 1, used_goals)
+            used_goals[goal_index] = False
+
+            if total_cost < min_cost: 
+                min_cost = total_cost
+                
+    return min_cost
+
 def heuristic(state):
 
     total = 0 
