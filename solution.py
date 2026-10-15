@@ -7,7 +7,7 @@ from sokoban import sokoban_goal_state
 
 UNREACHABLE = 999999999 
 
-def reverse_bfs(goal, free_cells):                   # hàm BFS ngược: tính số lần đẩy thùng tối thiểu từ các ô có đường đi về đích
+def reverse_bfs(goal, free_cells):                   # hàm BFS ngược: tính số lần đẩy tối thiểu từ mỗi vị trí của thùng đến một đích cụ thể.
 
     DIRECTIONS = [(0,1), (0,-1), (-1,0), (1,0)]      # lên, xuống, trái, phải
     distance = {}
@@ -51,29 +51,49 @@ def best_matching(cost_matrix, box_index, used_goals):
                 
     return min_cost
 
-def heuristic(state):
+class heuristic(state):
 
-    total = 0 
-    
+    def __init__(self, state):
+        self.free_cells = set()     # dùng set để tối ưu: kiểm tra mất O(1) thay vì dùng list duyệt mất O(n)
+        for x in range (state.width):
+            for y in range (state.height):
+                if (x, y) not in state.obstacles:       # nếu tọa độ kh nằm trong tập các ô tường
+                    self.free_cells.add((x, y))
+        
+        self.goals = list(state.storage)        # danh sách goals thuận tiện khi truy cập theo chỉ số và giữ thứ tự tương ứng với self.tables.
+        self.tables = []
+        for goal in self.goals:
+            self.tables.append(reverse_bfs(goal, self.free_cells))
+        self.alive_cells = set()
+        for table in self.tables:
+            for cell in table:
+                self.alive_cells.add(cell)
+        self.cache = {}         # tạo 1 dictionary để lưu lại kết quả heuristics đã tính
 
-    for box in state.boxes:
-        bx = box[0]
-        by = box[1]
+    def __call__(self, state):
+        boxes = state.boxes
+        if boxes in self.cache:
+            return self.cache[boxes]
+        for box in boxes:
+            if box not in self.alive_cells: 
+                self.cache[boxes] = UNREACHABLE
+                return UNREACHABLE
+        # cost[i][j]: chi phí đưa thùng i tới đích j
+        cost = []
+        for box in boxes:
+            row = []
+            for table in self.tables:
+                if box in table:
+                    row.append(table[box])
+                else:
+                    row.append(UNREACHABLE)
+            cose.append(row)
 
-        min_dist = UNREACHABLE
+        used = [False] * len(self.goals)        # đánh dấu đích. nếu đã sử dụng -> true
+        result = best_matching(cost, 0, used) 
 
-        for storage in state.storage:
-            sx = storage[0]
-            sy = storage[1]
-
-            dist = abs(bx - sx) + abs(by - sy)
-
-            if (dist < min_dist):
-                min_dist = dist
-
-        total = total + min_dist        
-
-    return total
+        self.cache[boxes] = result
+        return result  
 
 
 
