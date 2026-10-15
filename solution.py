@@ -41,7 +41,7 @@ def best_matching(cost_matrix, box_index, used_goals):
 
     for goal_index in range(len(cost_matrix[box_index])):
 
-        if (not used_goals(goal_index)) and cost_matrix[box_index][goal_index] < UNREACHABLE:
+        if (not used_goals[goal_index]) and cost_matrix[box_index][goal_index] < UNREACHABLE:
             used_goals[goal_index] = True
             total_cost = cost_matrix[box_index][goal_index] + best_matching(cost_matrix, box_index + 1, used_goals)
             used_goals[goal_index] = False
@@ -51,7 +51,7 @@ def best_matching(cost_matrix, box_index, used_goals):
                 
     return min_cost
 
-class heuristic(state):
+class heuristic:
 
     def __init__(self, state):
         self.free_cells = set()     # dùng set để tối ưu: kiểm tra mất O(1) thay vì dùng list duyệt mất O(n)
@@ -87,14 +87,13 @@ class heuristic(state):
                     row.append(table[box])
                 else:
                     row.append(UNREACHABLE)
-            cose.append(row)
+            cost.append(row)
 
         used = [False] * len(self.goals)        # đánh dấu đích. nếu đã sử dụng -> true
         result = best_matching(cost, 0, used) 
 
         self.cache[boxes] = result
         return result  
-
 
 
 def solve(initial_state, timebound=120):
