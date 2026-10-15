@@ -17,7 +17,7 @@ def reverse_bfs(goal, free_cells):                   # hàm BFS ngược: tính 
     while len(queue) > 0:
         current = queue.pop(0)
         x = current[0]
-        y = current[0]
+        y = current[1]
 
         for direction in DIRECTIONS:
             dx = direction[0]
@@ -28,7 +28,7 @@ def reverse_bfs(goal, free_cells):                   # hàm BFS ngược: tính 
             if box_cell in free_cells and robot_cell in free_cells:
                 if box_cell not in distance:
                     distance[box_cell] = distance[current] + 1
-                    queue.append[box_cell]
+                    queue.append(box_cell)
 
     return distance
 
