@@ -108,7 +108,8 @@ def solve(initial_state, timebound=120):
     best_g[initial_state.hashable_state()] = 0
 
     g0 = 0 
-    h0 = heuristic(initial_state)
+    h_calc = heuristic(initial_state)
+    h0 = h_calc(initial_state)
     f0 = g0 + h0
 
     heap = []
@@ -142,8 +143,8 @@ def solve(initial_state, timebound=120):
 
             best_g[key] = g
 
-            h = heuristic(nxt)
-            f = g + h
+            h = h_calc(nxt)
+            f = g + 2*h
 
             count = count + 1
             heapq.heappush(heap, (f, h, count, nxt))
