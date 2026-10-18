@@ -2,20 +2,24 @@
 
 import time
 import heapq 
+from collections import deque
 
 from sokoban import sokoban_goal_state
 
 UNREACHABLE = 999999999 
+WEIGHTS = [3, 2, 1.5, 1]
+REFINE_SECONDS = 10
+MAX_STATES = 1500000
 
 def reverse_bfs(goal, free_cells):                   # hàm BFS ngược: tính số lần đẩy tối thiểu từ mỗi vị trí của thùng đến một đích cụ thể.
 
     DIRECTIONS = [(0,1), (0,-1), (-1,0), (1,0)]      # lên, xuống, trái, phải
     distance = {}
     distance[goal] = 0
-    queue = [goal]
+    queue = deque([goal])
 
     while len(queue) > 0:
-        current = queue.pop(0)
+        current = queue.popleft()
         x = current[0]
         y = current[1]
 
@@ -96,59 +100,254 @@ class heuristic:
         return result  
 
 
-def solve(initial_state, timebound=120):
-    """Return a goal SokobanState with a valid parent chain, or False."""
+def state_key(state) :
+    return (tuple(sorted(state.robots)), state.boxes)
+
+
+def weighted_search(initial_state, h_calc, weight, deadline, max_states, deadlock_data) :
+
+    wall, dead, goals = deadlock_data
+    g0 = 0
+    h0 = h_calc(initial_state)
+    f0 = g0 + h0 * weight
+
+    best_g = { state_key(initial_state) : 0 }
+
+    count = 0 
+
+    heap = []
+    heapq.heappush(heap, (f0, h0, count, initial_state))
+
+    while len(heap) > 0 :
+
+        if time.monotonic() > deadline:
+            return None
+
+        item = heapq.heappop(heap)
+        curr_state = item[3]
+
+        if curr_state.gval > best_g[state_key(curr_state)]:
+            continue
+
+        if sokoban_goal_state(curr_state):
+            return curr_state 
+
+        for nxt in curr_state.successors() :
+            h = h_calc(nxt)
+
+            if h >= UNREACHABLE:
+                continue
+
+            pushed = nxt.boxes - curr_state.boxes
+            if pushed :
+                moved  = next(iter(pushed))
+
+                if deadlock(moved, nxt.boxes, nxt.robots, wall, dead, goals):
+                    continue
+
+            key = state_key(nxt)
+            g = nxt.gval
+
+            if ( key in best_g ) and ( best_g[key] <= g ) :
+                continue
+            best_g[key] = g
+
+            if len(best_g) > max_states:
+                return None
+            
+            count = count + 1
+
+            heapq.heappush( heap, (g + weight * h, h, count, nxt) )
+
+    return None
+
+
+def solve(initial_state, timebound = 120) :
 
     start_time = time.monotonic()
 
     if timebound <= 0:
         return False
 
-    best_g = {}
-    best_g[initial_state.hashable_state()] = 0
+    deadline = start_time + timebound * 0.95
 
-    g0 = 0 
     h_calc = heuristic(initial_state)
-    h0 = h_calc(initial_state)
-    f0 = g0 + h0
 
-    heap = []
-    count = 0
+    if h_calc(initial_state) >= UNREACHABLE:
+        return False
 
-    heapq.heappush( heap, (f0, h0, count, initial_state) )
+    deadlock_data = prepare_deadlock(initial_state.width, initial_state.height,
+                                     initial_state.obstacles, initial_state.storage)
+    
+    wall, dead, goals = deadlock_data
 
-    while len(heap) > 0:
+    if deadlock_full(initial_state.boxes, initial_state.robots, wall, dead, goals):
+        return False                      
+
+    best = None
+    limit = deadline
+
+
+    for weight in WEIGHTS :
         
-        if time.monotonic() - start_time > timebound :
-            return False
+        if time.monotonic() > limit:
+            break
 
-        item = heapq.heappop(heap)
-        current = item[3]
+        found = weighted_search( initial_state, h_calc, weight, deadline, MAX_STATES, deadlock_data )
 
-        key = current.hashable_state()
+        if found is None:
+            break
 
-        if current.gval > best_g[key]:
-            continue
+        if best is None:
+            limit = min(deadline, time.monotonic() + REFINE_SECONDS)
 
-        if sokoban_goal_state(current):
-            return current
+        if ( best is None ) or ( found.gval < best.gval ) :
+            best = found 
 
-        for nxt in current.successors():
-            key = nxt.hashable_state()
-            g = nxt.gval
+        if weight == 1:
+            break
+        
+    if best is None:
+        return False
 
-            if key in best_g:
-                if best_g[key] <= g:
-                    continue
+    return best    
 
-            best_g[key] = g
+DIRS = ((0, -1), (1, 0), (0, 1), (-1, 0))
 
-            h = h_calc(nxt)
-            f = g + 2*h
+def prepare_deadlock(width, height, obtacles, storage):
 
-            count = count + 1
-            heapq.heappush(heap, (f, h, count, nxt))
+    wall = set(obtacles)
+
+    for x in range(-1, width + 1) :
+        
+        wall.add( (x, -1) )
+        wall.add( (x, height) )
+
+    for y in range(-1, height + 1) :
+        wall.add( (-1, y) )
+        wall.add( (width, y) )
+
+    alive = set(storage)
+    stack = list(storage)
+
+    while stack:
+        x,y = stack.pop()
+
+        for dx, dy in DIRS :
+            pre_box = (x - dx, y - dy)
+            pre_robot = (x - 2*dx, y - 2*dy)
+
+            if (( pre_box in alive ) or
+                ( pre_box in wall ) or
+                ( pre_robot in wall ) ) :
+                continue
+            alive.add(pre_box)
+            stack.append(pre_box)
+
+    dead = set()
+
+    for x in range(width):
+        for y in range(height):
+            pos = (x, y)
+
+            if (pos not in wall) and (pos not in alive):
+                dead.add(pos)
+
+    return wall, dead, set(storage)
+
+
+def axis_blocked( left_cell, right_cell,boxes, checked, wall, dead ) :
+
+    if ( left_cell in wall ) or ( right_cell in wall ):
+        return True
+
+    if ( left_cell in dead ) and ( right_cell in dead ):
+        return True
+
+    if left_cell in boxes:
+        if (( left_cell in checked ) or
+            is_frozen(left_cell, boxes, checked, wall, dead)) :
+                return True
+
+    if right_cell in boxes:
+        if (( right_cell in checked ) or 
+            is_frozen(right_cell, boxes, checked, wall, dead)) :
+                return True
 
     return False
+
+
+def is_frozen(box, boxes, checked, wall, dead) :
+
+    checked = checked | { box }
+
+    x,y = box
+
+    return ( axis_blocked( (x - 1, y), (x + 1, y), boxes, checked, wall, dead ) and
+             axis_blocked( (x, y - 1), (x, y + 1), boxes, checked, wall, dead ) )
+
+
+def corral_deadlock( boxes, robots, frozen_boxes, wall, goals ) :
+
+    reachable_pos = set(robots)
+    stack = list(robots)
+
+    while stack :
+
+        x,y = stack.pop()
+
+        for dx, dy in DIRS:
+            nxt = ( x + dx, y + dy )
+
+            if ((nxt in wall) or 
+                (nxt in frozen_boxes) or
+                (nxt in reachable_pos) ) :
+                    continue
+            reachable_pos.add(nxt)
+            stack.append(nxt)
+
+    for box in boxes :
+        if box not in goals and box not in reachable_pos:
+            return True
+    
+    return False
+
+
+def deadlock( moved, boxes, robots, wall, dead, goals ) :
+
+    if ( moved in dead ) and ( moved not in goals ) : 
+        return True
+
+    if not is_frozen( moved, boxes, frozenset(), wall, dead ) :
+        return False
+
+    frozen_on_goal = set()
+
+    for box in boxes:
+        if ( box not in goals ) and ( box in dead ) :
+            return True
+
+        if is_frozen( box, boxes, frozenset(), wall, dead ) :
+            if box not in goals:
+                return True
+            frozen_on_goal.add((box))
+
+    return corral_deadlock(boxes, robots, frozen_on_goal, wall, goals)
+
+
+def deadlock_full(boxes, robots, wall, dead, goals):
+
+    frozen_on_goal = set()
+
+    for box in boxes:
+        if ( box not in goals ) and ( box in dead ) :
+            return True
+
+        if is_frozen( box, boxes, frozenset(), wall, dead ) :
+            if ( box not in goals ) :
+                return True 
+            frozen_on_goal.add(box)
+
+    return corral_deadlock(boxes, robots, frozen_on_goal, wall, goals)
 
 
