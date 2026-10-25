@@ -6,7 +6,7 @@ from collections import deque
 
 from sokoban import sokoban_goal_state
 
-UNREACHABLE = 999999999 
+UNREACHABLE = 999999999                              # đánh đấu những cặp thùng-đích không thể ghép với nhau
 WEIGHTS = [3, 2, 1.5, 1]
 REFINE_SECONDS = 10
 MAX_STATES = 1500000
