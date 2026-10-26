@@ -36,24 +36,92 @@ def reverse_bfs(goal, free_cells):                   # hàm BFS ngược: tính 
 
     return distance
 
-def best_matching(cost_matrix, box_index, used_goals):
-
-    if box_index >= len(cost_matrix):
+def hungarian_matching(cost):
+    m = len(cost)       # số hàng = số thùng
+    if m == 0:
         return 0
+    n = len(cost[0])    # số cột = số đích
+    if m > n: 
+        return UNREACHABLE
     
-    min_cost = UNREACHABLE
+    BIG = 1             # chi phí lớn dùng thay cho những cặp không thể ghép
+    for row in cost:
+        max_cost = 0   
+        for c in row:
+            if c < UNREACHABLE and c > max_cost:
+                max_cost = c
+        BIG += max_cost             # BIG lớn hơn tổng chi phí của mọi phương án ghép hợp lệ
+    # tạo ma trận a, thay những chỗ UNREACHABLE bằng BIG 
+    a = []
+    for row in cost:
+        new_row = []
+        for c in row:
+            if c >= UNREACHABLE:
+                new_row.append(BIG)
+            else:
+                new_row.append(c)
+        a.append(new_row)       # a gồm các list là các hàng của ma trận cũ nhưng thay UNREACHABLE = BIG để xử lí
 
-    for goal_index in range(len(cost_matrix[box_index])):
+    # thuật toán Hungarian (phát triển từ Hungarian cổ điển)
+    INF = 10**18           
+    u = [0] * (m + 1)        # thế vị của các hàng (thùng)
+    v = [0] * (n + 1)        # thế vị của cột (đích)
+    p = [0] * (n + 1)           # p[j] = thùng đang được ghép với đích j (hàng đang ghép với cột j)
+    way = [0] * (n + 1)         # lưu trữ đường đi để tìm cột trước đó. way[j] = cột đứng trước j khi truy vết -> sử dụng để đổi phép ghép cặp
 
-        if (not used_goals[goal_index]) and cost_matrix[box_index][goal_index] < UNREACHABLE:
-            used_goals[goal_index] = True
-            total_cost = cost_matrix[box_index][goal_index] + best_matching(cost_matrix, box_index + 1, used_goals)
-            used_goals[goal_index] = False
+    for i in range (1, m + 1):
+        p[0] = i               
+        j0 = 0                 
+        minv = [INF] * (n + 1)             # chi phí giảm nhỏ nhất đến mỗi cột
+        visited = [False] * (n + 1)        
 
-            if total_cost < min_cost: 
-                min_cost = total_cost
-                
-    return min_cost
+        # tìm kiếm
+        while True:
+            visited[j0] = True              
+            i0 = p[j0]                      
+            delta = INF                    
+            j1 = 0        
+
+            for j in range (1, n + 1):
+                if not visited[j]:       
+                    cur = a[i0 - 1][j - 1]  - u[i0] - v[j]           # tính chi phí giảm khi ghép hàng i0 với cột j
+
+                    if cur < minv[j]: 
+                        minv[j] = cur
+                        way[j] = j0                                  
+
+                    # chọn cột chưa thăm có minv nhỏ nhất
+                    if minv[j] < delta:
+                        delta = minv[j]
+                        j1 = j                                       # lưu cột j là cột chọn tiếp theo
+
+            # điều chỉnh thế vị để tiếp tục tìm đường ghép
+            for j in range (n + 1):
+                if visited[j]: 
+                    u[p[j]] += delta                                
+                    v[j] -= delta                                 
+                else:
+                    minv[j] -= delta                                  
+
+            j0 = j1                                                 
+            if p[j0] == 0:                                    # tìm được cột chưa có hàng ghép      
+                break
+
+        #truy vết: lần ngược đường đi để cập nhật các cặp ghép
+        while j0 != 0:                                             
+            j1 = way[j0]                                           
+            p[j0] = p[j1]                                            
+            j0 = j1   
+                                                         
+    total = 0
+    for j in range (1, n + 1):
+        if p[j] != 0: 
+            total = total + a[p[j] - 1][j - 1]
+    if total >= BIG: 
+        return UNREACHABLE
+    return total
+
+
 
 class heuristic:
 
@@ -94,7 +162,7 @@ class heuristic:
             cost.append(row)
 
         used = [False] * len(self.goals)        # đánh dấu đích. nếu đã sử dụng -> true
-        result = best_matching(cost, 0, used) 
+        result = hungarian_matching(cost)
 
         self.cache[boxes] = result
         return result  
