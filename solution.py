@@ -6,7 +6,7 @@ from collections import deque
 
 from sokoban import sokoban_goal_state
 
-UNREACHABLE = 999999999                              # đánh đấu những cặp thùng-đích không thể ghép với nhau
+UNREACHABLE = 999999999 
 WEIGHTS = [3, 2, 1.5, 1]
 REFINE_SECONDS = 10
 MAX_STATES = 1500000
@@ -36,21 +36,23 @@ def reverse_bfs(goal, free_cells):                   # hàm BFS ngược: tính 
 
     return distance
 
+
 def hungarian_matching(cost):
-    m = len(cost)       # số hàng = số thùng
+    m = len(cost)       # số hàng -> số thùng
     if m == 0:
         return 0
-    n = len(cost[0])    # số cột = số đích
+    n = len(cost[0])    # số cột -> số đích
     if m > n: 
         return UNREACHABLE
     
-    BIG = 1             # chi phí lớn dùng thay cho những cặp không thể ghép
+    BIG = 1             # xử lí những  nơi mà không thể ghép thùng với đích. 
+                        # sử dụng BIG để không bị nhầm với UNREACHABLE(đánh dấu những đường không đi được) 
     for row in cost:
-        max_cost = 0   
+        max_cost = 0    # khởi tạo max_cost = 0 để tính toán
         for c in row:
             if c < UNREACHABLE and c > max_cost:
                 max_cost = c
-        BIG += max_cost             # BIG lớn hơn tổng chi phí của mọi phương án ghép hợp lệ
+        BIG += max_cost
     # tạo ma trận a, thay những chỗ UNREACHABLE bằng BIG 
     a = []
     for row in cost:
@@ -64,55 +66,53 @@ def hungarian_matching(cost):
 
     # thuật toán Hungarian (phát triển từ Hungarian cổ điển)
     INF = 10**18           
-    u = [0] * (m + 1)        # thế vị của các hàng (thùng)
-    v = [0] * (n + 1)        # thế vị của cột (đích)
-    p = [0] * (n + 1)           # p[j] = thùng đang được ghép với đích j (hàng đang ghép với cột j)
+    u = [0] * (m + 1)        # thế vị của hàng (thùng). khởi tạo đến m + 1 do ở code chỉ số bắt đầu từ 0, nhưng ở ma trận chỉ số bắt đầu từ 1. 
+    v = [0] * (n + 1)        # thế vị của cột (đích). tương tự
+    p = [0] * (n + 1)           # p[j] = i: thùng i ghép với đích j (hàng i ghép với cột j)
     way = [0] * (n + 1)         # lưu trữ đường đi để tìm cột trước đó. way[j] = cột đứng trước j khi truy vết -> sử dụng để đổi phép ghép cặp
 
     for i in range (1, m + 1):
-        p[0] = i               
-        j0 = 0                 
-        minv = [INF] * (n + 1)             # chi phí giảm nhỏ nhất đến mỗi cột
-        visited = [False] * (n + 1)        
-
+        p[0] = i                # bắt đầu tìm kiếm xem thùng i gán với đích nào. cột 0 là cột giả để thể hiện bắt đầu thuật toán
+        j0 = 0                  # j0 = 0: cột giả 
+        minv = [INF] * (n + 1)              # khởi tạo chi phí nhỏ nhất khi đi tới cột cụ thể, bắt đầu bằng INF
+        visited = [False] * (n + 1)         # khởi tạo visited, cho tất cả bằng false đánh dấu các ô chưa được thăm
         # tìm kiếm
+
         while True:
-            visited[j0] = True              
-            i0 = p[j0]                      
-            delta = INF                    
-            j1 = 0        
-
+            visited[j0] = True              # thăm j0
+            i0 = p[j0]                      # cho i0 là thùng nối với đích j0
+            delta = INF                     # khởi tạo delta là chi phí nhỏ nhất trong các cột chưa thăm, là min của minv
+            j1 = 0                          # khởi tạo cột tiếp theo được chọn, ban đầu chưa chọn cột nào. j1 là cột tiếp theo được chọn (trong vòng tìm kiếm)
+            
             for j in range (1, n + 1):
-                if not visited[j]:       
+                if not visited[j]:          # nếu chưa thăm j
                     cur = a[i0 - 1][j - 1]  - u[i0] - v[j]           # tính chi phí giảm khi ghép hàng i0 với cột j
-
+                    
                     if cur < minv[j]: 
                         minv[j] = cur
-                        way[j] = j0                                  
-
-                    # chọn cột chưa thăm có minv nhỏ nhất
+                        way[j] = j0                                  # lưu cột đứng trước j để sau này truy vết nếu cần
+                    
                     if minv[j] < delta:
                         delta = minv[j]
                         j1 = j                                       # lưu cột j là cột chọn tiếp theo
-
-            # điều chỉnh thế vị để tiếp tục tìm đường ghép
+            
             for j in range (n + 1):
                 if visited[j]: 
-                    u[p[j]] += delta                                
-                    v[j] -= delta                                 
+                    u[p[j]] += delta                                 # tăng thế vị hàng đã thăm để điều chỉnh chi phí giảm
+                    v[j] -= delta                                    # giảm thế vị cột đã thăm để bù trừ, giữ nguyên chi phí giảm giữa các hàng và cột đã thăm, tránh làm mất số 0 đã tạo được trong hungarian
                 else:
-                    minv[j] -= delta                                  
+                    minv[j] -= delta                                    # trừ delta ở minv để đưa ít nhất một minv về 0, giúp thuật toán tiếp tục tìm đường ghép
 
-            j0 = j1                                                 
-            if p[j0] == 0:                                    # tìm được cột chưa có hàng ghép      
+            j0 = j1                                                  # cập nhật cột hiện tại thành cột có minv nhỏ nhất để tiếp tục tìm đường ghép
+            if p[j0] == 0:                                           # nếu đích hiện tại không ghép thùng nào
                 break
 
-        #truy vết: lần ngược đường đi để cập nhật các cặp ghép
-        while j0 != 0:                                             
-            j1 = way[j0]                                           
-            p[j0] = p[j1]                                            
-            j0 = j1   
-                                                         
+        #truy vết
+        while j0 != 0:                                               # cột hiện tại khác 0
+            j1 = way[j0]                                             # j1 là cột đứng trước j0 (trong vòng truy vết)
+            p[j0] = p[j1]                                            # Chuyển hàng đang ghép với cột trước sang cột hiện tại
+            j0 = j1                                                  # Quay về cột trước đó để tiếp tục lần ngược đường ghép
+    
     total = 0
     for j in range (1, n + 1):
         if p[j] != 0: 
@@ -120,7 +120,6 @@ def hungarian_matching(cost):
     if total >= BIG: 
         return UNREACHABLE
     return total
-
 
 
 class heuristic:
@@ -161,8 +160,7 @@ class heuristic:
                     row.append(UNREACHABLE)
             cost.append(row)
 
-        used = [False] * len(self.goals)        # đánh dấu đích. nếu đã sử dụng -> true
-        result = hungarian_matching(cost)
+        result = hungarian_matching(cost)       # ghép cặp tối ưu bằng Hungarian: O(m^2 * n) thay cho quay lui
 
         self.cache[boxes] = result
         return result  
@@ -261,7 +259,7 @@ def solve(initial_state, timebound = 120) :
         if time.monotonic() > limit:
             break
 
-        found = weighted_search( initial_state, h_calc, weight, deadline, MAX_STATES, deadlock_data )
+        found = weighted_search( initial_state, h_calc, weight, limit, MAX_STATES, deadlock_data )
 
         if found is None:
             break
@@ -417,5 +415,3 @@ def deadlock_full(boxes, robots, wall, dead, goals):
             frozen_on_goal.add(box)
 
     return corral_deadlock(boxes, robots, frozen_on_goal, wall, goals)
-
-
